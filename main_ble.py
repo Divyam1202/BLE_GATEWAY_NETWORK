@@ -1,41 +1,54 @@
 from bluez_peripheral.gatt.service import Service
-from bluez_peripheral.gatt.characteristic import characteristic, CharacteristicFlags as CharFlags
+from bluez_peripheral.gatt.characteristic import (
+    CharacteristicReadOptions,
+    CharacteristicWriteOptions,
+    CharacteristicFlags as CharFlags,
+    characteristic,
+)
 import subprocess
 import struct
+import asyncio
+
+from bluez_peripheral.util import Adapter, get_message_bus
+from bluez_peripheral.advert import Advertisement
+from bluez_peripheral.agent import NoIoAgent
+
 
 class BLE(Service):
+    BLE_write = characteristic("BEF1", CharFlags.WRITE)
+
     def __init__(self, mac_Address):
         # Base 16 service UUID, This should be a primary service.
         super().__init__("BEEF", True)
-        
-    @characteristic("BEF1",CharFlags.WRITE)
-    def BLE_write(self):
-        pass
+        self.mac_address = mac_Address
+        self.DC_ble = b"\x00\x00"
 
     @BLE_write.setter
-    def any_write(self, value, options):
+    def any_write(
+        self, value: bytes, options: CharacteristicWriteOptions
+    ) -> None:
         print(f"{value.decode()}")
         #--------------------------------------------------------------
-        
+
         result = subprocess.run([value], stdout=subprocess.PIPE, text=True)
         print(result.stdout)
 
-    def my_writeonly_characteristic(self, value,options):
+    @characteristic("BEF2", CharFlags.READ | CharFlags.NOTIFY)
+    def display_BLE(self, options: CharacteristicReadOptions) -> bytes:
+        return self.DC_ble
+
+    def my_writeonly_characteristic(
+        self, value: bytes, options: CharacteristicWriteOptions
+    ) -> None:
         # Your characteristics will need to handle bytes.
         self._some_value = value
 
     #--------------------------------------------------------------------------
-    def write_BLE(self, new_rate):
+    def write_BLE(self, new_rate: int) -> None:
         flags = 0
         rate = struct.pack("<BB", flags, new_rate)
         self.DC_ble = rate
-        self.display_BLE(rate)
-
-        
-from bluez_peripheral.util import *
-from bluez_peripheral.advert import Advertisement
-from bluez_peripheral.agent import NoIoAgent
-import asyncio
+        self.display_BLE.changed(rate)
 
 async def main():
     # Alternativly you can request this bus directly from dbus_next.
